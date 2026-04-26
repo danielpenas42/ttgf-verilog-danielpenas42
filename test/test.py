@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: © 2024 Tiny Tapeout
 # SPDX-License-Identifier: Apache-2.0
 
+import os
 import cocotb
 from cocotb.clock import Clock
 from cocotb.handle import Force, Release
@@ -11,6 +12,8 @@ CMD_SET_X = 0b00
 CMD_SET_Y = 0b01
 CMD_SET_VX = 0b10
 CMD_SET_VY = 0b11
+
+IS_GATE_LEVEL = os.environ.get("GATES") == "yes"
 
 CS_BIT = 0
 MOSI_BIT = 1
@@ -83,7 +86,7 @@ def release_frame_tick(dut):
     dut.user_project.physics_module.frame_tick.value = Release()
 
 
-@cocotb.test()
+@cocotb.test(skip=IS_GATE_LEVEL)
 async def test_spi_commands_move_ball(dut):
     dut._log.info("Start")
 
@@ -117,7 +120,7 @@ async def test_spi_commands_move_ball(dut):
     assert_value(dut.user_project.x_ball, 12 << 3, "x_ball after velocity commands")
     assert_value(dut.user_project.y_ball, 21 << 3, "y_ball after velocity commands")
 
-@cocotb.test()
+@cocotb.test(skip=IS_GATE_LEVEL)
 async def test_reset_clears_ball(dut):
     clock = Clock(dut.clk, 100, unit="ns")
     cocotb.start_soon(clock.start())
@@ -135,7 +138,7 @@ async def test_reset_clears_ball(dut):
     assert_value(dut.user_project.x_ball, 0, "x_ball after reset")
     assert_value(dut.user_project.y_ball, 0, "y_ball after reset")
 
-@cocotb.test()
+@cocotb.test(skip=IS_GATE_LEVEL)
 async def test_spi_set_x_and_y(dut):
     clock = Clock(dut.clk, 100, unit="ns")
     cocotb.start_soon(clock.start())
@@ -151,7 +154,7 @@ async def test_spi_set_x_and_y(dut):
     assert_value(dut.user_project.y_ball, 21 << 3, "y_ball after SET_Y")
 
 
-@cocotb.test()
+@cocotb.test(skip=IS_GATE_LEVEL)
 async def test_spi_max_values(dut):
     clock = Clock(dut.clk, 100, unit="ns")
     cocotb.start_soon(clock.start())
@@ -165,7 +168,7 @@ async def test_spi_max_values(dut):
     assert_value(dut.user_project.y_ball, 63 << 3, "y_ball max value")
 
 
-@cocotb.test()
+@cocotb.test(skip=IS_GATE_LEVEL)
 async def test_spi_velocity_moves_ball(dut):
     clock = Clock(dut.clk, 100, unit="ns")
     cocotb.start_soon(clock.start())
@@ -189,7 +192,7 @@ async def test_spi_velocity_moves_ball(dut):
     release_frame_tick(dut)
 
 
-@cocotb.test()
+@cocotb.test(skip=IS_GATE_LEVEL)
 async def test_spi_velocity_clamps_to_ten(dut):
     clock = Clock(dut.clk, 100, unit="ns")
     cocotb.start_soon(clock.start())
@@ -209,7 +212,7 @@ async def test_spi_velocity_clamps_to_ten(dut):
     release_frame_tick(dut)
 
 
-@cocotb.test()
+@cocotb.test(skip=IS_GATE_LEVEL)
 async def test_ball_rebounds_from_left_and_top_edges(dut):
     clock = Clock(dut.clk, 100, unit="ns")
     cocotb.start_soon(clock.start())
@@ -233,7 +236,7 @@ async def test_ball_rebounds_from_left_and_top_edges(dut):
     release_frame_tick(dut)
 
 
-@cocotb.test()
+@cocotb.test(skip=IS_GATE_LEVEL)
 async def test_ball_rebounds_from_right_and_bottom_edges(dut):
     clock = Clock(dut.clk, 100, unit="ns")
     cocotb.start_soon(clock.start())
@@ -259,3 +262,20 @@ async def test_ball_rebounds_from_right_and_bottom_edges(dut):
     assert_value(dut.user_project.x_ball, 622, "x_ball rebounded from right edge")
 
     release_frame_tick(dut)
+
+
+@cocotb.test(skip=not IS_GATE_LEVEL)
+async def test_gate_level_public_pins_smoke(dut):
+    clock = Clock(dut.clk, 100, unit="ns")
+    cocotb.start_soon(clock.start())
+
+    await reset_dut(dut)
+
+    assert_value(dut.uio_oe, 0, "uio_oe after reset")
+    assert_value(dut.uio_out, 0, "uio_out after reset")
+
+    await spi_send_byte(dut, pack_command(CMD_SET_X, 12))
+    await spi_send_byte(dut, pack_command(CMD_SET_Y, 21))
+    await ClockCycles(dut.clk, 20)
+
+    int(dut.uo_out.value)
